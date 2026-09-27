@@ -27,12 +27,6 @@ export const ContextualProductPanel: React.FC = () => {
   const unlockRoomItem = useWorldStore(s => s.unlockRoomItem);
   const inspectRoomObject = useWorldStore(s => s.inspectRoomObject);
 
-  const product = products.find(p => p.id === selectedProductId);
-  if (!product) return null;
-
-  const isOwned = unlockedRoomItems.includes(product.id);
-  const calc = calculateAffordability(product.price, freeMoney);
-
   const handleClose = () => {
     selectProduct(null);
     inspectRoomObject(null);
@@ -47,6 +41,12 @@ export const ContextualProductPanel: React.FC = () => {
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
+
+  const product = products.find(p => p.id === selectedProductId);
+  if (!product) return null;
+
+  const isOwned = unlockedRoomItems.includes(product.id);
+  const calc = calculateAffordability(product.price, freeMoney);
 
   const handleBuy = () => {
     const success = buyProduct(product.id);
