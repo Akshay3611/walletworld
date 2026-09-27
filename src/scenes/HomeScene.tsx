@@ -16,18 +16,18 @@ export const HomeScene: React.FC = () => {
 
   const unlockedRoomItems = useWorldStore((s) => s.unlockedRoomItems);
   const isCelebratingUnlock = useWorldStore((s) => s.isCelebratingUnlock);
+  const setHasInteracted = useWorldStore((s) => s.setHasInteracted);
 
   const cityGroup = useRef<THREE.Group>(null);
   const trafficGroup = useRef<THREE.Group>(null);
-  const laptopGroup = useRef<THREE.Group>(null);
-  const watchGroup = useRef<THREE.Group>(null);
-  const headphonesGroup = useRef<THREE.Group>(null);
   const celebrationParticlesRef = useRef<THREE.Group>(null);
 
-  const [hoveredItem, setHoveredItem] = useState<string | null>(null);
+  // In-room interactive object groups
+  const macbookGroupRef = useRef<THREE.Group>(null);
+  const watchGroupRef = useRef<THREE.Group>(null);
+  const headphonesGroupRef = useRef<THREE.Group>(null);
 
-  // Dynamic light & colourful financial UI texture for the curved monitor
-  const [monitorTexture, setMonitorTexture] = useState<THREE.CanvasTexture | null>(null);
+  const [hoveredItem, setHoveredItem] = useState<string | null>(null);
 
   // Products
   const macbook = products.find((p) => p.id === 'prod-macbookpro');
@@ -41,6 +41,9 @@ export const HomeScene: React.FC = () => {
   const isSmartwatchOwned = unlockedRoomItems.includes('prod-smartwatch');
   const isHeadphonesOwned = unlockedRoomItems.includes('prod-sony-wh1000xm6');
   const isMacbookOwned = unlockedRoomItems.includes('prod-macbookpro');
+
+  // Dynamic light & colourful financial UI texture for the curved monitor
+  const [monitorTexture, setMonitorTexture] = useState<THREE.CanvasTexture | null>(null);
 
   useEffect(() => {
     const canvas = document.createElement('canvas');
@@ -150,101 +153,154 @@ export const HomeScene: React.FC = () => {
     }
   }, []);
 
-  // 52 modern colourful skyscrapers (white, sky blue, terracotta coral, emerald accents)
-  const buildings = useMemo(() => {
+  // Multi-layered stylized city skyline (distant atmospheric silhouettes + midground high-rises)
+  const skylineTowers = useMemo(() => {
     const list = [];
-    const count = 52;
-    const towerColors = [
-      '#FFFFFF',
-      '#E0F2FE',
-      '#EDE9FE',
-      '#FEF3C7',
-      '#FFE4E6',
-      '#DCFCE7',
-    ];
-    const trimColors = ['#0EA5E9', '#10B981', '#F59E0B', '#EC4899', '#6366F1'];
+    const count = 48;
+    const bodyColors = ['#FFFFFF', '#E0F2FE', '#EDE9FE', '#FEF3C7', '#DCFCE7'];
+    const trimColors = ['#0EA5E9', '#10B981', '#F59E0B', '#6366F1'];
 
     for (let i = 0; i < count; i++) {
-      const x = (Math.random() - 0.5) * 55;
-      const z = -10 - Math.random() * 28;
-      const width = 1.4 + Math.random() * 2.8;
-      const depth = 1.4 + Math.random() * 2.8;
-      const height = 8 + Math.random() * 18;
-      const bodyColor = towerColors[i % towerColors.length];
+      const isDistant = i < 18;
+      const x = (Math.random() - 0.5) * 60;
+      const z = isDistant ? -22 - Math.random() * 12 : -12 - Math.random() * 8;
+      const width = isDistant ? 2.5 + Math.random() * 3.5 : 1.8 + Math.random() * 2.6;
+      const depth = width;
+      const height = isDistant ? 14 + Math.random() * 16 : 8 + Math.random() * 14;
+      const bodyColor = isDistant ? '#CBD5E1' : bodyColors[i % bodyColors.length];
       const trimColor = trimColors[i % trimColors.length];
-      const hasAntenna = Math.random() > 0.4;
-      list.push({ x, z, width, depth, height, bodyColor, trimColor, hasAntenna });
+      const opacity = isDistant ? 0.65 : 0.95;
+      list.push({ x, z, width, depth, height, bodyColor, trimColor, opacity, isDistant });
     }
     return list;
   }, []);
 
-  // Sky Aerial vehicle traffic trails (bright cyan and sunset coral)
-  const trafficCars = useMemo(() => {
-    return Array.from({ length: 16 }, (_, i) => ({
-      y: 2.0 + (i % 5) * 1.5,
-      z: -12 - i * 1.8,
-      speed: 1.8 + Math.random() * 2.5,
-      color: i % 2 === 0 ? '#0EA5E9' : '#F43F5E',
-      offset: Math.random() * 50 - 25,
+  // Aerial traffic lights
+  const trafficTrails = useMemo(() => {
+    return Array.from({ length: 12 }, (_, i) => ({
+      y: 2.5 + (i % 4) * 1.6,
+      z: -14 - i * 1.5,
+      speed: 1.6 + Math.random() * 2.0,
+      color: i % 2 === 0 ? '#38BDF8' : '#F43F5E',
+      offset: Math.random() * 40 - 20,
     }));
   }, []);
 
   useFrame(({ clock }, delta) => {
     const t = clock.getElapsedTime();
 
-    // Traffic motion
+    // Subtle aerial traffic motion
     if (trafficGroup.current) {
       trafficGroup.current.children.forEach((child, index) => {
-        const car = trafficCars[index];
+        const car = trafficTrails[index];
         if (car) {
-          child.position.x = ((car.offset + t * car.speed) % 60) - 30;
+          child.position.x = ((car.offset + t * car.speed) % 55) - 27.5;
         }
       });
     }
 
-    // Gentle slow rotation when an item is inspected
-    if (selectedProductId === 'prod-smartwatch' && watchGroup.current) {
-      watchGroup.current.rotation.y += delta * 0.8;
+    // 1. MACBOOK PRO INTERACTIVE ANIMATION (Hover bobbing & Inspection showcase)
+    if (macbookGroupRef.current) {
+      const isSelected = selectedProductId === 'prod-macbookpro';
+      const isHovered = hoveredItem === 'laptop';
+
+      // Subtle scale transition
+      const targetScale = isSelected ? 1.04 : isHovered ? 1.05 : 1.0;
+      macbookGroupRef.current.scale.lerp(new THREE.Vector3(targetScale, targetScale, targetScale), delta * 8);
+
+      // Subtle vertical bob on hover
+      if (isHovered && !isSelected) {
+        macbookGroupRef.current.position.y = 1.08 + Math.sin(t * 3.5) * 0.012;
+      } else {
+        macbookGroupRef.current.position.y = 1.08;
+      }
+
+      // Smooth slow rotation when selected
+      if (isSelected) {
+        macbookGroupRef.current.rotation.y = 0.35 + Math.sin(t * 1.2) * 0.06;
+      } else {
+        macbookGroupRef.current.rotation.y = 0.35;
+      }
     }
-    if (selectedProductId === 'prod-macbookpro' && laptopGroup.current) {
-      laptopGroup.current.rotation.y = 0.35 + Math.sin(t * 1.2) * 0.08;
+
+    // 2. SMARTWATCH INTERACTIVE ANIMATION
+    if (watchGroupRef.current) {
+      const isSelected = selectedProductId === 'prod-smartwatch';
+      const isHovered = hoveredItem === 'watch';
+
+      const targetScale = isSelected ? 1.05 : isHovered ? 1.08 : 1.0;
+      watchGroupRef.current.scale.lerp(new THREE.Vector3(targetScale, targetScale, targetScale), delta * 8);
+
+      if (isHovered && !isSelected) {
+        watchGroupRef.current.position.y = 1.08 + Math.sin(t * 4.0) * 0.015;
+      } else {
+        watchGroupRef.current.position.y = 1.08;
+      }
+
+      // Turn-table showcase rotation when inspected
+      if (isSelected) {
+        watchGroupRef.current.rotation.y += delta * 0.8;
+      }
     }
-    if (selectedProductId === 'prod-sony-wh1000xm6' && headphonesGroup.current) {
-      headphonesGroup.current.rotation.y += delta * 0.7;
+
+    // 3. HEADPHONES INTERACTIVE ANIMATION
+    if (headphonesGroupRef.current) {
+      const isSelected = selectedProductId === 'prod-sony-wh1000xm6';
+      const isHovered = hoveredItem === 'headphones';
+
+      const targetScale = isSelected ? 1.05 : isHovered ? 1.08 : 1.0;
+      headphonesGroupRef.current.scale.lerp(new THREE.Vector3(targetScale, targetScale, targetScale), delta * 8);
+
+      if (isHovered && !isSelected) {
+        headphonesGroupRef.current.position.y = 1.08 + Math.sin(t * 3.8) * 0.012;
+      } else {
+        headphonesGroupRef.current.position.y = 1.08;
+      }
+
+      if (isSelected) {
+        headphonesGroupRef.current.rotation.y += delta * 0.7;
+      }
     }
 
     // Celebration particles ascend
     if (celebrationParticlesRef.current && isCelebratingUnlock) {
       celebrationParticlesRef.current.children.forEach((p, idx) => {
-        p.position.y += delta * 0.6;
-        if (p.position.y > 2.5) {
+        p.position.y += delta * 0.65;
+        if (p.position.y > 2.6) {
           p.position.y = 1.1;
         }
-        p.rotation.y += delta * (idx % 2 === 0 ? 1 : -1);
+        p.rotation.y += delta * (idx % 2 === 0 ? 1.2 : -1.2);
       });
     }
   });
 
   return (
     <group position={[0, 0, 0]}>
-      {/* ===================== BRIGHT SKY BACKDROP ===================== */}
-      <mesh position={[0, 10, -32]}>
-        <planeGeometry args={[80, 50]} />
+      {/* ===================== BRIGHT ATMOSPHERIC SKY & HORIZON ===================== */}
+      {/* Soft Gradient Sky Dome Plane */}
+      <mesh position={[0, 11, -30]}>
+        <planeGeometry args={[84, 52]} />
         <meshBasicMaterial color="#E0F2FE" />
       </mesh>
 
-      {/* Sun Disk in the Sky */}
-      <mesh position={[12, 18, -30]}>
-        <circleGeometry args={[4.5, 32]} />
+      {/* Sunlit Golden Horizon Glow */}
+      <mesh position={[0, 4, -29.8]}>
+        <planeGeometry args={[84, 18]} />
+        <meshBasicMaterial color="#FEF3C7" transparent opacity={0.45} />
+      </mesh>
+
+      {/* Sun Disk */}
+      <mesh position={[14, 18, -29.5]}>
+        <circleGeometry args={[4.2, 32]} />
         <meshBasicMaterial color="#FEF08A" />
       </mesh>
 
-      {/* Stylized Fluffy Sunlit Clouds */}
+      {/* Soft Sunlit Clouds */}
       {[
-        [-14, 14, -26, 3.8],
-        [-6, 17, -27, 4.5],
-        [6, 13, -25, 3.2],
-        [18, 15, -28, 5.0],
+        [-16, 15, -25, 4.0],
+        [-6, 17, -26, 4.8],
+        [7, 14, -24, 3.4],
+        [19, 16, -27, 5.2],
       ].map((pos, idx) => (
         <mesh key={idx} position={[pos[0], pos[1], pos[2]]}>
           <capsuleGeometry args={[pos[3] * 0.45, pos[3], 16, 16]} />
@@ -252,142 +308,148 @@ export const HomeScene: React.FC = () => {
         </mesh>
       ))}
 
-      {/* ===================== LUXURY SUNLIT PENTHOUSE ARCHITECTURE ===================== */}
-      {/* Polished White Marble / Terrazzo Reflective Floor */}
-      <mesh position={[0, 0, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <planeGeometry args={[16, 14]} />
-        <MeshReflectorMaterial
-          blur={[300, 100]}
-          resolution={512}
-          mirror={0.65}
-          mixBlur={1}
-          mixStrength={25}
-          roughness={0.2}
-          depthScale={1.2}
-          minDepthThreshold={0.4}
-          maxDepthThreshold={1.4}
-          color="#F8FAFC"
-          metalness={0.2}
-        />
-      </mesh>
-
-      {/* Crisp White Ceiling with Recessed Light Channels */}
-      <mesh position={[0, 4.2, 0]} rotation={[Math.PI / 2, 0, 0]}>
-        <planeGeometry args={[16, 14]} />
-        <meshStandardMaterial color="#FFFFFF" roughness={0.9} />
-      </mesh>
-
-      {/* Left Wall - Architectural Gallery Surface */}
-      <mesh position={[-6.2, 2.1, 0]} rotation={[0, Math.PI / 2, 0]}>
-        <planeGeometry args={[14, 4.2]} />
-        <meshStandardMaterial color="#F8FAFC" roughness={0.7} />
-      </mesh>
-
-      {/* Right Wall with Natural Scandinavian Bleached Oak Slats */}
-      <group position={[6.1, 2.1, -1.8]} rotation={[0, -Math.PI / 2, 0]}>
-        <mesh>
-          <planeGeometry args={[8, 4.2]} />
-          <meshStandardMaterial color="#F1F5F9" roughness={0.8} />
-        </mesh>
-        {/* Vertical Decorative Slat Strips with Warm Backlight */}
-        {Array.from({ length: 18 }).map((_, i) => (
-          <mesh key={i} position={[-3.6 + i * 0.42, 0, 0.02]}>
-            <boxGeometry args={[0.18, 4.1, 0.03]} />
-            <meshStandardMaterial color="#E2D9CC" roughness={0.4} />
-          </mesh>
-        ))}
-        {/* Soft Warm LED Cove Line */}
-        <mesh position={[0, 2.05, 0.04]}>
-          <boxGeometry args={[7.6, 0.03, 0.02]} />
-          <meshStandardMaterial color="#F59E0B" emissive="#FBBF24" emissiveIntensity={1.5} />
-        </mesh>
-      </group>
-
-      {/* Panoramic Floor-to-Ceiling Window Frame in Clean Titanium White */}
-      <mesh position={[0, 0.5, -5.2]}>
-        <boxGeometry args={[14, 1.0, 0.25]} />
-        <meshStandardMaterial color="#FFFFFF" roughness={0.3} />
-      </mesh>
-      <mesh position={[-5.4, 2.3, -5.2]}>
-        <boxGeometry args={[1.8, 3.8, 0.25]} />
-        <meshStandardMaterial color="#FFFFFF" roughness={0.3} />
-      </mesh>
-      <mesh position={[5.4, 2.3, -5.2]}>
-        <boxGeometry args={[1.8, 3.8, 0.25]} />
-        <meshStandardMaterial color="#FFFFFF" roughness={0.3} />
-      </mesh>
-      <mesh position={[0, 3.95, -5.2]}>
-        <boxGeometry args={[14, 0.6, 0.25]} />
-        <meshStandardMaterial color="#FFFFFF" roughness={0.3} />
-      </mesh>
-
-      {/* Crystal Clear Window Glass Sheet */}
-      <mesh position={[0, 2.4, -5.15]}>
-        <planeGeometry args={[9.2, 3.1]} />
-        <meshStandardMaterial
-          color="#BAE6FD"
-          transparent
-          opacity={0.12}
-          roughness={0.05}
-          metalness={0.8}
-        />
-      </mesh>
-
-      {/* Window Sill Mint/Teal Accent Line */}
-      <mesh position={[0, 1.01, -5.08]}>
-        <boxGeometry args={[9.2, 0.02, 0.04]} />
-        <meshStandardMaterial color="#10B981" emissive="#34D399" emissiveIntensity={1.2} />
-      </mesh>
-
-      {/* ===================== COLOURFUL SOLAR CITY SKYLINE ===================== */}
+      {/* Layered City Skyline */}
       <group ref={cityGroup}>
-        {buildings.map((b, i) => (
-          <group key={i} position={[b.x, b.height / 2 - 4.5, b.z]}>
+        {skylineTowers.map((t, idx) => (
+          <group key={idx} position={[t.x, t.height / 2 - 4.2, t.z]}>
             <mesh>
-              <boxGeometry args={[b.width, b.height, b.depth]} />
-              <meshStandardMaterial color={b.bodyColor} roughness={0.3} metalness={0.1} />
-            </mesh>
-            <mesh position={[0, 0, b.depth / 2 + 0.02]}>
-              <planeGeometry args={[b.width * 0.9, b.height * 0.85]} />
+              <boxGeometry args={[t.width, t.height, t.depth]} />
               <meshStandardMaterial
-                color={b.trimColor}
-                transparent
-                opacity={0.35}
-                wireframe
+                color={t.bodyColor}
+                roughness={0.45}
+                metalness={0.1}
+                transparent={t.isDistant}
+                opacity={t.opacity}
               />
             </mesh>
-            <mesh position={[0, b.height / 2 + 0.05, 0]}>
-              <boxGeometry args={[b.width * 0.9, 0.1, b.depth * 0.9]} />
-              <meshStandardMaterial color={b.trimColor} roughness={0.4} />
-            </mesh>
-            {b.hasAntenna && (
-              <mesh position={[0, b.height / 2 + 0.8, 0]}>
-                <cylinderGeometry args={[0.02, 0.04, 1.6, 8]} />
-                <meshStandardMaterial color="#94A3B8" metalness={0.9} />
+            {/* Window trim for midground towers */}
+            {!t.isDistant && (
+              <mesh position={[0, 0, t.depth / 2 + 0.02]}>
+                <planeGeometry args={[t.width * 0.88, t.height * 0.85]} />
+                <meshStandardMaterial
+                  color={t.trimColor}
+                  transparent
+                  opacity={0.25}
+                  wireframe
+                />
               </mesh>
             )}
           </group>
         ))}
       </group>
 
-      {/* Sky Aerial Traffic Lines */}
+      {/* Distant aerial traffic trails */}
       <group ref={trafficGroup}>
-        {trafficCars.map((car, idx) => (
+        {trafficTrails.map((car, idx) => (
           <mesh key={idx} position={[car.offset, car.y, car.z]}>
-            <boxGeometry args={[1.2, 0.06, 0.06]} />
+            <boxGeometry args={[1.1, 0.05, 0.05]} />
             <meshStandardMaterial color={car.color} emissive={car.color} emissiveIntensity={1.8} />
           </mesh>
         ))}
       </group>
 
+      {/* ===================== ARCHITECTURE & FLOOR ===================== */}
+      {/* Light Warm-Gray Polished Terrazzo Floor with Soft Subtle Reflection */}
+      <mesh position={[0, 0, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[16, 14]} />
+        <MeshReflectorMaterial
+          blur={[180, 60]}
+          resolution={512}
+          mirror={0.22} // Subtle, grounded, NOT mirror-like
+          mixBlur={1}
+          mixStrength={3.5}
+          roughness={0.42}
+          depthScale={1.2}
+          minDepthThreshold={0.4}
+          maxDepthThreshold={1.4}
+          color="#E8E4DF" // Light warm-gray polished stone
+          metalness={0.08}
+        />
+      </mesh>
+
+      {/* Subtle Architectural Floor Tile Inset Lines */}
+      {[-3.5, 0, 3.5].map((xPos, idx) => (
+        <mesh key={idx} position={[xPos, 0.002, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+          <planeGeometry args={[0.02, 14]} />
+          <meshStandardMaterial color="#D1D5DB" roughness={0.9} />
+        </mesh>
+      ))}
+
+      {/* Crisp Ceiling with Inset Light Channels */}
+      <mesh position={[0, 4.2, 0]} rotation={[Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[16, 14]} />
+        <meshStandardMaterial color="#FFFFFF" roughness={0.95} />
+      </mesh>
+
+      {/* Gallery Left Wall in Clean Off-White */}
+      <mesh position={[-6.2, 2.1, 0]} rotation={[0, Math.PI / 2, 0]}>
+        <planeGeometry args={[14, 4.2]} />
+        <meshStandardMaterial color="#F8FAFC" roughness={0.75} />
+      </mesh>
+
+      {/* Right Wall with Natural Scandinavian Bleached Oak Slats & LED Cove */}
+      <group position={[6.1, 2.1, -1.8]} rotation={[0, -Math.PI / 2, 0]}>
+        <mesh>
+          <planeGeometry args={[8, 4.2]} />
+          <meshStandardMaterial color="#F1F5F9" roughness={0.8} />
+        </mesh>
+        {Array.from({ length: 18 }).map((_, i) => (
+          <mesh key={i} position={[-3.6 + i * 0.42, 0, 0.02]}>
+            <boxGeometry args={[0.18, 4.1, 0.03]} />
+            <meshStandardMaterial color="#E2D9CC" roughness={0.45} />
+          </mesh>
+        ))}
+        {/* Soft Golden LED Cove Light Strip */}
+        <mesh position={[0, 2.05, 0.04]}>
+          <boxGeometry args={[7.6, 0.03, 0.02]} />
+          <meshStandardMaterial color="#F59E0B" emissive="#FBBF24" emissiveIntensity={1.4} />
+        </mesh>
+      </group>
+
+      {/* Floor-to-Ceiling Panoramic Window Frame in Clean Architectural Bevels */}
+      <mesh position={[0, 0.45, -5.2]}>
+        <boxGeometry args={[14, 0.9, 0.28]} />
+        <meshStandardMaterial color="#FFFFFF" roughness={0.25} />
+      </mesh>
+      <mesh position={[-5.4, 2.3, -5.2]}>
+        <boxGeometry args={[1.8, 3.8, 0.28]} />
+        <meshStandardMaterial color="#FFFFFF" roughness={0.25} />
+      </mesh>
+      <mesh position={[5.4, 2.3, -5.2]}>
+        <boxGeometry args={[1.8, 3.8, 0.28]} />
+        <meshStandardMaterial color="#FFFFFF" roughness={0.25} />
+      </mesh>
+      <mesh position={[0, 3.95, -5.2]}>
+        <boxGeometry args={[14, 0.6, 0.28]} />
+        <meshStandardMaterial color="#FFFFFF" roughness={0.25} />
+      </mesh>
+
+      {/* Crystal Clear Glass Pane */}
+      <mesh position={[0, 2.4, -5.15]}>
+        <planeGeometry args={[9.2, 3.1]} />
+        <meshStandardMaterial
+          color="#BAE6FD"
+          transparent
+          opacity={0.12}
+          roughness={0.04}
+          metalness={0.8}
+        />
+      </mesh>
+
+      {/* Window Sill Teal Accent Line */}
+      <mesh position={[0, 0.91, -5.08]}>
+        <boxGeometry args={[9.2, 0.02, 0.04]} />
+        <meshStandardMaterial color="#10B981" emissive="#34D399" emissiveIntensity={1.2} />
+      </mesh>
+
       {/* ===================== EXECUTIVE DESK & WORKSTATION ===================== */}
       <group position={[-2.6, 0, -2.5]}>
-        {/* Clean White Top */}
+        {/* Birch Wood Top */}
         <mesh position={[0, 1.05, 0]}>
           <boxGeometry args={[2.7, 0.06, 1.25]} />
-          <meshStandardMaterial color="#FFFFFF" roughness={0.2} metalness={0.1} />
+          <meshStandardMaterial color="#FFFFFF" roughness={0.25} metalness={0.05} />
         </mesh>
-        {/* Birch Wood Sled Legs */}
+        {/* Desk Sled Legs */}
         <mesh position={[-1.25, 0.52, 0]}>
           <boxGeometry args={[0.06, 1.0, 1.15]} />
           <meshStandardMaterial color="#D7C4B7" roughness={0.5} />
@@ -397,9 +459,14 @@ export const HomeScene: React.FC = () => {
           <meshStandardMaterial color="#D7C4B7" roughness={0.5} />
         </mesh>
 
+        {/* Charcoal Felt Desk Mat */}
+        <mesh position={[0, 1.081, 0.08]}>
+          <boxGeometry args={[1.5, 0.005, 0.65]} />
+          <meshStandardMaterial color="#334155" roughness={0.9} />
+        </mesh>
+
         {/* Ultra-Wide Curved Silver Studio Display */}
         <group position={[0, 1.48, -0.25]}>
-          {/* Silver Aluminium Stand */}
           <mesh position={[0, -0.25, 0]}>
             <cylinderGeometry args={[0.035, 0.035, 0.4, 16]} />
             <meshStandardMaterial color="#E2E8F0" metalness={0.9} roughness={0.1} />
@@ -408,12 +475,10 @@ export const HomeScene: React.FC = () => {
             <boxGeometry args={[0.45, 0.02, 0.3]} />
             <meshStandardMaterial color="#E2E8F0" metalness={0.9} roughness={0.1} />
           </mesh>
-          {/* Monitor Outer Chassis in Pure White/Silver */}
           <mesh>
             <boxGeometry args={[1.9, 0.72, 0.06]} />
             <meshStandardMaterial color="#F8FAFC" metalness={0.6} roughness={0.2} />
           </mesh>
-          {/* Luminous Light Financial Display */}
           <mesh position={[0, 0, 0.032]}>
             <planeGeometry args={[1.84, 0.66]} />
             {monitorTexture ? (
@@ -424,13 +489,56 @@ export const HomeScene: React.FC = () => {
           </mesh>
         </group>
 
-        {/* ================= INTERACTIVE ITEM 1: MACBOOK PRO 16" M4 MAX ================= */}
+        {/* Nordic Minimalist Desk Lamp with Warm Glow */}
+        <group position={[1.1, 1.08, -0.3]}>
+          <mesh position={[0, 0.01, 0]}>
+            <cylinderGeometry args={[0.08, 0.08, 0.02, 24]} />
+            <meshStandardMaterial color="#F59E0B" metalness={0.8} roughness={0.2} />
+          </mesh>
+          <mesh position={[-0.04, 0.22, 0]} rotation={[0, 0, -0.25]}>
+            <cylinderGeometry args={[0.012, 0.012, 0.42, 16]} />
+            <meshStandardMaterial color="#F59E0B" metalness={0.8} />
+          </mesh>
+          <mesh position={[-0.12, 0.38, 0.05]} rotation={[0.4, 0, -0.2]}>
+            <coneGeometry args={[0.08, 0.12, 24]} />
+            <meshStandardMaterial color="#FFFFFF" roughness={0.3} />
+          </mesh>
+          {/* Cozy warm lamp light pool */}
+          <pointLight position={[-0.14, 0.32, 0.05]} intensity={1.2} distance={2.4} color="#FEF08A" />
+        </group>
+
+        {/* Stack of 2 Hardcover Design Books on Desk Corner */}
+        <group position={[1.05, 1.08, 0.3]} rotation={[0, -0.15, 0]}>
+          <mesh position={[0, 0.018, 0]}>
+            <boxGeometry args={[0.26, 0.032, 0.35]} />
+            <meshStandardMaterial color="#475569" roughness={0.6} />
+          </mesh>
+          <mesh position={[0.01, 0.045, 0]} rotation={[0, 0.08, 0]}>
+            <boxGeometry args={[0.24, 0.025, 0.32]} />
+            <meshStandardMaterial color="#10B981" roughness={0.5} />
+          </mesh>
+        </group>
+
+        {/* Minimalist Ceramic Vase with Green Plant */}
+        <group position={[-1.15, 1.08, 0.38]}>
+          <mesh position={[0, 0.08, 0]}>
+            <cylinderGeometry args={[0.05, 0.07, 0.16, 24]} />
+            <meshStandardMaterial color="#F8FAFC" roughness={0.3} />
+          </mesh>
+          <mesh position={[0, 0.2, 0]}>
+            <sphereGeometry args={[0.09, 16, 16]} />
+            <meshStandardMaterial color="#10B981" roughness={0.7} />
+          </mesh>
+        </group>
+
+        {/* ================= INTERACTIVE 3D OBJECT 1: MACBOOK PRO 16" ================= */}
         <group
-          ref={laptopGroup}
+          ref={macbookGroupRef}
           position={[-0.75, 1.08, 0.15]}
           rotation={[0, 0.35, 0]}
           onClick={(e) => {
             e.stopPropagation();
+            setHasInteracted(true);
             selectProduct('prod-macbookpro');
           }}
           onPointerOver={(e) => {
@@ -459,7 +567,6 @@ export const HomeScene: React.FC = () => {
               <boxGeometry args={[0.44, 0.28, 0.012]} />
               <meshStandardMaterial color="#F8FAFC" metalness={0.9} />
             </mesh>
-            {/* Luminous Retina Screen */}
             <mesh position={[0, 0.14, 0.007]}>
               <planeGeometry args={[0.42, 0.26]} />
               <meshStandardMaterial
@@ -470,49 +577,51 @@ export const HomeScene: React.FC = () => {
             </mesh>
           </group>
 
-          {/* Hover / Selection Ring */}
-          {(hoveredItem === 'laptop' || selectedProductId === 'prod-macbookpro') && (
+          {/* Hover Rim Glow Base Halo */}
+          {hoveredItem === 'laptop' && selectedProductId !== 'prod-macbookpro' && (
             <mesh position={[0, 0.005, 0]} rotation={[-Math.PI / 2, 0, 0]}>
               <ringGeometry args={[0.26, 0.3, 32]} />
-              <meshBasicMaterial
-                color={isMacbookOwned ? '#10B981' : '#F43F5E'}
-                transparent
-                opacity={0.85}
-              />
+              <meshBasicMaterial color="#6366F1" transparent opacity={0.8} />
             </mesh>
           )}
 
-          {/* Floating Contextual Pill Tag */}
-          <Html position={[0, 0.38, 0]} center distanceFactor={7}>
-            <div
-              onClick={() => selectProduct('prod-macbookpro')}
-              className={`px-3 py-1 rounded-full text-[10px] font-mono font-bold shadow-lg border flex items-center gap-1.5 transition-transform duration-200 cursor-pointer pointer-events-auto whitespace-nowrap select-none ${
-                selectedProductId === 'prod-macbookpro'
-                  ? 'scale-110 bg-slate-900 text-white border-indigo-400 ring-2 ring-indigo-400/50'
-                  : hoveredItem === 'laptop'
-                  ? 'scale-105 bg-white text-slate-900 border-indigo-300 shadow-xl'
-                  : 'bg-white/90 text-slate-700 border-slate-200 hover:scale-105'
-              }`}
-            >
-              <span>💻</span>
-              <span>MacBook Pro 16"</span>
-              <span className={`px-1.5 py-0.2 rounded-md ${
-                isMacbookOwned
-                  ? 'bg-emerald-100 text-emerald-800'
-                  : 'bg-rose-100 text-rose-800'
-              }`}>
-                {isMacbookOwned ? 'OWNED' : `${Math.round(macbookCalc.progress * 100)}%`}
-              </span>
-            </div>
-          </Html>
+          {/* Anchored 3D Label: Attached with vertical stalk, hides when inspected */}
+          {selectedProductId !== 'prod-macbookpro' && (
+            <group position={[0, 0.34, 0]}>
+              <Html center distanceFactor={7.5} zIndexRange={[10, 0]}>
+                <div
+                  onClick={() => {
+                    setHasInteracted(true);
+                    selectProduct('prod-macbookpro');
+                  }}
+                  className={`flex flex-col items-center select-none pointer-events-auto cursor-pointer transition-all duration-200 ${
+                    hoveredItem === 'laptop' ? 'scale-105' : 'scale-100 opacity-90'
+                  }`}
+                >
+                  {/* Badge */}
+                  <div className="px-2.5 py-1 rounded-full bg-white/95 backdrop-blur-md shadow-glass border border-slate-200 text-slate-800 text-[10px] font-mono font-bold flex items-center gap-1.5 whitespace-nowrap">
+                    <span>💻</span>
+                    <span>MacBook Pro 16"</span>
+                    <span className="px-1.5 py-0.2 rounded-md bg-rose-100 text-rose-800 font-extrabold">
+                      {isMacbookOwned ? 'OWNED' : `${Math.round(macbookCalc.progress * 100)}%`}
+                    </span>
+                  </div>
+                  {/* Micro connecting hairline */}
+                  <div className="w-[1.5px] h-3 bg-indigo-500/60 mt-0.5" />
+                  <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 shadow-sm" />
+                </div>
+              </Html>
+            </group>
+          )}
         </group>
 
-        {/* ================= INTERACTIVE ITEM 2: APEX CYBER HORIZON SMARTWATCH ================= */}
+        {/* ================= INTERACTIVE 3D OBJECT 2: SMARTWATCH ON DOCK ================= */}
         <group
-          ref={watchGroup}
-          position={[0.85, 1.08, 0.15]}
+          ref={watchGroupRef}
+          position={[0.75, 1.08, 0.15]}
           onClick={(e) => {
             e.stopPropagation();
+            setHasInteracted(true);
             selectProduct('prod-smartwatch');
           }}
           onPointerOver={(e) => {
@@ -525,7 +634,7 @@ export const HomeScene: React.FC = () => {
             document.body.style.cursor = 'auto';
           }}
         >
-          {/* Modern Magnetic Angled Charging Stand */}
+          {/* Angled Charging Dock */}
           <mesh position={[0, 0.04, 0]}>
             <cylinderGeometry args={[0.08, 0.09, 0.08, 24]} />
             <meshStandardMaterial color="#E2E8F0" roughness={0.3} metalness={0.8} />
@@ -535,9 +644,8 @@ export const HomeScene: React.FC = () => {
             <meshStandardMaterial color="#FFFFFF" roughness={0.2} metalness={0.5} />
           </mesh>
 
-          {/* Smartwatch Case (Titanium with Emerald Screen) */}
+          {/* Smartwatch Unit */}
           <group position={[0, 0.12, 0.02]} rotation={[0.4, 0, 0]}>
-            {/* Outer Bezel */}
             <mesh>
               <cylinderGeometry args={[0.065, 0.065, 0.02, 32]} />
               <meshStandardMaterial
@@ -546,16 +654,16 @@ export const HomeScene: React.FC = () => {
                 roughness={0.15}
               />
             </mesh>
-            {/* Emerald Holographic Always-On Dial */}
+            {/* Luminous Dial */}
             <mesh position={[0, 0.011, 0]}>
               <circleGeometry args={[0.054, 32]} />
               <meshStandardMaterial
                 color="#10B981"
                 emissive="#34D399"
-                emissiveIntensity={isSmartwatchOwned ? 2.2 : 1.5}
+                emissiveIntensity={isSmartwatchOwned ? 2.2 : 1.6}
               />
             </mesh>
-            {/* Silicone Strap Ends */}
+            {/* Silicone Strap */}
             <mesh position={[0, 0, 0.07]}>
               <boxGeometry args={[0.045, 0.015, 0.05]} />
               <meshStandardMaterial color="#1E293B" roughness={0.8} />
@@ -566,43 +674,51 @@ export const HomeScene: React.FC = () => {
             </mesh>
           </group>
 
-          {/* Pulsing Mint Beacon Ring for Affordable Item */}
+          {/* Mint Glow Beacon Ring for Available Item */}
           <mesh position={[0, 0.01, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-            <ringGeometry args={[0.13, 0.16, 32]} />
+            <ringGeometry args={[0.12, 0.15, 32]} />
             <meshStandardMaterial
               color="#10B981"
               emissive="#34D399"
-              emissiveIntensity={1.8}
+              emissiveIntensity={isSmartwatchOwned ? 1.0 : 1.8}
             />
           </mesh>
 
-          {/* Floating Contextual Pill Tag */}
-          <Html position={[0, 0.32, 0]} center distanceFactor={7}>
-            <div
-              onClick={() => selectProduct('prod-smartwatch')}
-              className={`px-3 py-1 rounded-full text-[10px] font-mono font-bold shadow-lg border flex items-center gap-1.5 transition-transform duration-200 cursor-pointer pointer-events-auto whitespace-nowrap select-none ${
-                selectedProductId === 'prod-smartwatch'
-                  ? 'scale-110 bg-emerald-600 text-white border-emerald-300 ring-2 ring-emerald-400/50'
-                  : hoveredItem === 'watch'
-                  ? 'scale-105 bg-emerald-50 text-emerald-900 border-emerald-400 shadow-xl'
-                  : 'bg-white/95 text-emerald-800 border-emerald-300 hover:scale-105'
-              }`}
-            >
-              <span>⚡</span>
-              <span>Cyber Horizon</span>
-              <span className="px-1.5 py-0.2 rounded-md bg-emerald-100 text-emerald-800 font-extrabold">
-                {isSmartwatchOwned ? 'OWNED' : smartwatchCalc.canAffordNow ? 'AVAILABLE • ₹12,990' : `${Math.round(smartwatchCalc.progress * 100)}%`}
-              </span>
-            </div>
-          </Html>
+          {/* Anchored 3D Label: Attached with vertical stalk, hides when inspected */}
+          {selectedProductId !== 'prod-smartwatch' && (
+            <group position={[0, 0.32, 0]}>
+              <Html center distanceFactor={7.5} zIndexRange={[10, 0]}>
+                <div
+                  onClick={() => {
+                    setHasInteracted(true);
+                    selectProduct('prod-smartwatch');
+                  }}
+                  className={`flex flex-col items-center select-none pointer-events-auto cursor-pointer transition-all duration-200 ${
+                    hoveredItem === 'watch' ? 'scale-105' : 'scale-100 opacity-90'
+                  }`}
+                >
+                  <div className="px-2.5 py-1 rounded-full bg-white/95 backdrop-blur-md shadow-glass border border-emerald-300 text-emerald-900 text-[10px] font-mono font-bold flex items-center gap-1.5 whitespace-nowrap">
+                    <span>⚡</span>
+                    <span>Cyber Horizon</span>
+                    <span className="px-1.5 py-0.2 rounded-md bg-emerald-100 text-emerald-800 font-extrabold">
+                      {isSmartwatchOwned ? 'OWNED' : smartwatchCalc.canAffordNow ? 'AVAILABLE • ₹12,990' : `${Math.round(smartwatchCalc.progress * 100)}%`}
+                    </span>
+                  </div>
+                  <div className="w-[1.5px] h-3 bg-emerald-500/60 mt-0.5" />
+                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-sm" />
+                </div>
+              </Html>
+            </group>
+          )}
         </group>
 
-        {/* ================= INTERACTIVE ITEM 3: SONY WH-1000XM6 HEADPHONES ================= */}
+        {/* ================= INTERACTIVE 3D OBJECT 3: SONY XM6 HEADPHONES ================= */}
         <group
-          ref={headphonesGroup}
+          ref={headphonesGroupRef}
           position={[-1.15, 1.08, -0.05]}
           onClick={(e) => {
             e.stopPropagation();
+            setHasInteracted(true);
             selectProduct('prod-sony-wh1000xm6');
           }}
           onPointerOver={(e) => {
@@ -615,7 +731,7 @@ export const HomeScene: React.FC = () => {
             document.body.style.cursor = 'auto';
           }}
         >
-          {/* Curved Scandinavian Wooden Headphone Stand */}
+          {/* Headphone Stand */}
           <mesh position={[0, 0.14, 0]}>
             <cylinderGeometry args={[0.04, 0.05, 0.28, 16]} />
             <meshStandardMaterial color="#D7C4B7" roughness={0.6} />
@@ -625,14 +741,12 @@ export const HomeScene: React.FC = () => {
             <meshStandardMaterial color="#D7C4B7" roughness={0.6} />
           </mesh>
 
-          {/* Headphones Resting on Stand */}
+          {/* Headphone Unit */}
           <group position={[0, 0.24, 0]}>
-            {/* Headband */}
             <mesh position={[0, 0.04, 0]}>
               <torusGeometry args={[0.1, 0.012, 16, 24, Math.PI]} />
               <meshStandardMaterial color="#1E293B" roughness={0.4} metalness={0.6} />
             </mesh>
-            {/* Ear Cups */}
             <mesh position={[-0.1, -0.02, 0]} rotation={[0, 0, Math.PI / 2]}>
               <cylinderGeometry args={[0.04, 0.04, 0.03, 16]} />
               <meshStandardMaterial color="#0F172A" metalness={0.8} />
@@ -643,33 +757,40 @@ export const HomeScene: React.FC = () => {
             </mesh>
           </group>
 
-          {/* Floating Contextual Pill Tag */}
-          <Html position={[0, 0.38, 0]} center distanceFactor={7}>
-            <div
-              onClick={() => selectProduct('prod-sony-wh1000xm6')}
-              className={`px-2.5 py-1 rounded-full text-[10px] font-mono font-bold shadow-lg border flex items-center gap-1.5 transition-transform duration-200 cursor-pointer pointer-events-auto whitespace-nowrap select-none ${
-                selectedProductId === 'prod-sony-wh1000xm6'
-                  ? 'scale-110 bg-indigo-600 text-white border-indigo-300 ring-2 ring-indigo-400/50'
-                  : hoveredItem === 'headphones'
-                  ? 'scale-105 bg-white text-indigo-900 border-indigo-300 shadow-xl'
-                  : 'bg-white/90 text-slate-700 border-slate-200 hover:scale-105'
-              }`}
-            >
-              <span>🎧</span>
-              <span>Sony XM6</span>
-              <span className="px-1.5 py-0.2 rounded-md bg-amber-100 text-amber-800">
-                {isHeadphonesOwned ? 'OWNED' : `${Math.round(headphonesCalc.progress * 100)}%`}
-              </span>
-            </div>
-          </Html>
+          {/* Anchored 3D Label: Attached with vertical stalk, hides when inspected */}
+          {selectedProductId !== 'prod-sony-wh1000xm6' && (
+            <group position={[0, 0.38, 0]}>
+              <Html center distanceFactor={7.5} zIndexRange={[10, 0]}>
+                <div
+                  onClick={() => {
+                    setHasInteracted(true);
+                    selectProduct('prod-sony-wh1000xm6');
+                  }}
+                  className={`flex flex-col items-center select-none pointer-events-auto cursor-pointer transition-all duration-200 ${
+                    hoveredItem === 'headphones' ? 'scale-105' : 'scale-100 opacity-90'
+                  }`}
+                >
+                  <div className="px-2.5 py-1 rounded-full bg-white/95 backdrop-blur-md shadow-glass border border-slate-200 text-slate-800 text-[10px] font-mono font-bold flex items-center gap-1.5 whitespace-nowrap">
+                    <span>🎧</span>
+                    <span>Sony XM6</span>
+                    <span className="px-1.5 py-0.2 rounded-md bg-amber-100 text-amber-800 font-extrabold">
+                      {isHeadphonesOwned ? 'OWNED' : `${Math.round(headphonesCalc.progress * 100)}%`}
+                    </span>
+                  </div>
+                  <div className="w-[1.5px] h-3 bg-amber-500/60 mt-0.5" />
+                  <div className="w-1.5 h-1.5 rounded-full bg-amber-500 shadow-sm" />
+                </div>
+              </Html>
+            </group>
+          )}
         </group>
 
-        {/* White Mechanical Keyboard & Magic Mouse */}
-        <mesh position={[0.05, 1.082, 0.22]}>
+        {/* White Mechanical Keyboard & Magic Mouse on Felt Mat */}
+        <mesh position={[0.02, 1.085, 0.18]}>
           <boxGeometry args={[0.55, 0.012, 0.18]} />
           <meshStandardMaterial color="#F1F5F9" roughness={0.4} />
         </mesh>
-        <mesh position={[0.42, 1.082, 0.22]}>
+        <mesh position={[0.42, 1.085, 0.18]}>
           <boxGeometry args={[0.07, 0.015, 0.11]} />
           <meshStandardMaterial color="#FFFFFF" roughness={0.2} />
         </mesh>
@@ -695,21 +816,26 @@ export const HomeScene: React.FC = () => {
         </mesh>
       </group>
 
-      {/* Modern Low Platform Bed with Pure Linen Duvet & Pastel Coral Pillows */}
+      {/* Modern Low Platform Bed with Pure Linen Duvet & Warm LED Underglow */}
       <group position={[3.2, 0, -2.4]}>
         <mesh position={[0, 0.25, 0]}>
           <boxGeometry args={[2.8, 0.5, 3.4]} />
           <meshStandardMaterial color="#E7DFD5" roughness={0.6} />
         </mesh>
-        {/* Sunrise Warm Underglow */}
+        {/* Soft Golden Sunrise Underglow */}
         <mesh position={[0, 0.03, 0]}>
           <boxGeometry args={[2.9, 0.02, 3.5]} />
-          <meshStandardMaterial color="#F59E0B" emissive="#FBBF24" emissiveIntensity={1.8} />
+          <meshStandardMaterial color="#F59E0B" emissive="#FBBF24" emissiveIntensity={1.5} />
         </mesh>
-        {/* Crisp White Linen Mattress & Duvet */}
+        {/* Crisp Off-White Linen Mattress */}
         <mesh position={[0, 0.58, 0.1]}>
           <boxGeometry args={[2.6, 0.22, 3.1]} />
-          <meshStandardMaterial color="#FFFFFF" roughness={0.9} />
+          <meshStandardMaterial color="#FAF9F6" roughness={0.9} />
+        </mesh>
+        {/* Sage Mint Throw Blanket at Foot of Bed */}
+        <mesh position={[0, 0.68, 1.05]}>
+          <boxGeometry args={[2.55, 0.05, 0.95]} />
+          <meshStandardMaterial color="#A7F3D0" roughness={0.95} />
         </mesh>
         {/* Pastel Pillows */}
         <mesh position={[-0.65, 0.74, -1.1]}>
@@ -718,7 +844,7 @@ export const HomeScene: React.FC = () => {
         </mesh>
         <mesh position={[0.65, 0.74, -1.1]}>
           <boxGeometry args={[0.9, 0.12, 0.6]} />
-          <meshStandardMaterial color="#A7F3D0" roughness={0.9} />
+          <meshStandardMaterial color="#E2E8F0" roughness={0.9} />
         </mesh>
         {/* Blonde Wood Headboard */}
         <mesh position={[0, 0.95, -1.6]}>
@@ -744,7 +870,7 @@ export const HomeScene: React.FC = () => {
         </group>
       </group>
 
-      {/* ===================== STYLIZED HUMAN AVATAR ===================== */}
+      {/* ===================== STYLIZED HUMAN GAME AVATAR ===================== */}
       <group position={[-0.4, 0, -2.8]} rotation={[0, -0.3, 0]}>
         <CharacterAvatar gear={avatarGear} isStanding={true} interactive={true} scale={1.05} />
       </group>
@@ -770,63 +896,64 @@ export const HomeScene: React.FC = () => {
         </group>
       )}
 
-      {/* ===================== FOCUSED PRODUCT SPOTLIGHTS ===================== */}
+      {/* ===================== PRODUCT SPOTLIGHTS ON INSPECTION ===================== */}
       {selectedProductId === 'prod-smartwatch' && (
         <spotLight
-          position={[-1.75, 2.5, -2.15]}
+          position={[-1.4, 2.5, -1.75]}
           target-position={[-1.75, 1.15, -2.15]}
-          intensity={3.5}
+          intensity={3.2}
           color="#34D399"
           distance={4}
-          angle={0.6}
-          penumbra={0.5}
+          angle={0.5}
+          penumbra={0.6}
         />
       )}
       {selectedProductId === 'prod-macbookpro' && (
         <spotLight
-          position={[-3.35, 2.6, -2.35]}
-          target-position={[-3.35, 1.1, -2.35]}
-          intensity={3.5}
+          position={[-2.35, 2.5, -1.8]}
+          target-position={[-2.8, 1.15, -2.35]}
+          intensity={3.2}
           color="#818CF8"
           distance={4}
-          angle={0.6}
-          penumbra={0.5}
+          angle={0.5}
+          penumbra={0.6}
         />
       )}
       {selectedProductId === 'prod-sony-wh1000xm6' && (
         <spotLight
-          position={[-3.75, 2.5, -2.55]}
-          target-position={[-3.75, 1.2, -2.55]}
-          intensity={3.5}
+          position={[-3.0, 2.5, -1.9]}
+          target-position={[-3.45, 1.25, -2.45]}
+          intensity={3.2}
           color="#F59E0B"
           distance={4}
-          angle={0.6}
-          penumbra={0.5}
+          angle={0.5}
+          penumbra={0.6}
         />
       )}
 
-      {/* ===================== BRIGHT CHEERFUL CINEMATIC LIGHTING ===================== */}
-      <ambientLight intensity={0.75} color="#F1F5F9" />
+      {/* ===================== LAYERED CINEMATIC LIGHTING ===================== */}
+      {/* 1. Global Soft Daylight Ambient */}
+      <ambientLight intensity={0.7} color="#F8FAFC" />
 
-      {/* Golden Sunlight Streaming through Window */}
+      {/* 2. Main Sunlight Directional Light streaming through Window */}
       <directionalLight
         position={[8, 14, -10]}
-        intensity={2.2}
+        intensity={2.0}
         color="#FFFBEB"
         castShadow
       />
 
-      {/* Sky Blue Fill */}
-      <directionalLight position={[-6, 10, -8]} intensity={1.0} color="#BAE6FD" />
+      {/* 3. Sky Blue Daylight Fill from Window */}
+      <directionalLight position={[-6, 10, -8]} intensity={0.8} color="#BAE6FD" />
 
-      {/* Warm Interior Sun Fill */}
-      <pointLight position={[-1, 3.2, 0]} intensity={1.2} color="#FFF7ED" distance={10} />
+      {/* 4. Warm Room Interior Accent Fill */}
+      <pointLight position={[-1, 3.2, 0]} intensity={1.1} color="#FFF7ED" distance={10} />
 
-      {/* Subtle Mint Window Sill Glow */}
-      <pointLight position={[0, 1.2, -4.8]} intensity={1.4} color="#34D399" distance={4} />
+      {/* 5. Window Sill Subtle Glow */}
+      <pointLight position={[0, 1.0, -4.8]} intensity={1.2} color="#34D399" distance={4} />
 
-      {/* Bed Sunrise Warm Glow */}
-      <pointLight position={[3.2, 0.8, -2.4]} intensity={1.5} color="#FBBF24" distance={5} />
+      {/* 6. Bed Golden Underglow */}
+      <pointLight position={[3.2, 0.7, -2.4]} intensity={1.2} color="#FBBF24" distance={5} />
     </group>
   );
 };

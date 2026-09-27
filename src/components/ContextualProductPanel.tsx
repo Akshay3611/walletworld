@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { 
   X, 
   Lock, 
@@ -37,6 +37,16 @@ export const ContextualProductPanel: React.FC = () => {
     selectProduct(null);
     inspectRoomObject(null);
   };
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        handleClose();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
 
   const handleBuy = () => {
     const success = buyProduct(product.id);
