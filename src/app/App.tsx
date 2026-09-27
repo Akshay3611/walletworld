@@ -2,6 +2,7 @@ import React from 'react';
 import { Main3DCanvas } from '../scenes/Main3DCanvas';
 import { WalletHUD } from '../components/WalletHUD';
 import { Navigation } from '../components/Navigation';
+import { ContextualProductPanel } from '../components/ContextualProductPanel';
 import { Dashboard } from '../screens/Dashboard';
 import { Shop } from '../screens/Shop';
 import { Garage } from '../screens/Garage';
@@ -9,15 +10,14 @@ import { Home } from '../screens/Home';
 import { Avatar } from '../screens/Avatar';
 import { Wallet } from '../screens/Wallet';
 import { Categories } from '../screens/Categories';
-import { ProductDetail } from '../screens/ProductDetail';
 import { PurchaseSuccess } from '../screens/PurchaseSuccess';
 import { useWalletStore } from '../store/walletStore';
 
 export const App: React.FC = () => {
-  const activeScreen = useWalletStore(s => s.activeScreen);
+  const activeScreen = useWalletStore((s) => s.activeScreen);
 
   return (
-    <div className="relative w-screen h-screen overflow-hidden bg-[#080A0E] text-[#F8FAFC]">
+    <div className="relative w-screen h-screen overflow-hidden bg-[#F1F5F9] text-[#0F172A] select-none">
       {/* 3D WebGL Game Engine Layer */}
       <Main3DCanvas />
 
@@ -38,8 +38,10 @@ export const App: React.FC = () => {
         {activeScreen === 'categories' && <Categories />}
       </main>
 
-      {/* Interactive Modals */}
-      <ProductDetail />
+      {/* Contextual Floating 3D Object Inspection Panel (No centered modal) */}
+      <ContextualProductPanel />
+
+      {/* Floating Celebratory Unlock Banner */}
       <PurchaseSuccess />
     </div>
   );

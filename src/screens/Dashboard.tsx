@@ -6,7 +6,8 @@ import {
   Car, 
   Building2, 
   Sparkles,
-  ChevronRight
+  ChevronRight,
+  MousePointerClick
 } from 'lucide-react';
 import { calculateAffordability, formatRupees } from '../utils/affordabilityService';
 
@@ -15,26 +16,41 @@ export const Dashboard: React.FC = () => {
   const products = useWalletStore(s => s.products);
   const freeMoney = useWalletStore(s => s.wallet.free);
   const selectProduct = useWalletStore(s => s.selectProduct);
+  const selectedProductId = useWalletStore(s => s.selectedProductId);
 
-  // Aspirational highlight targets (e.g. Royal Enfield, iPhone 16 Pro, Skyline Residence)
+  // Aspirational highlight targets (e.g. Royal Enfield, iPhone 16 Pro, Smartwatch)
   const aspirationalTargets = products.filter(p => 
-    ['prod-iphone16pro', 'prod-royal-enfield', 'prod-smartwatch'].includes(p.id)
+    ['prod-smartwatch', 'prod-macbookpro', 'prod-royal-enfield'].includes(p.id)
   );
 
+  const isInspecting = Boolean(selectedProductId);
+
   return (
-    <div className="absolute inset-0 z-10 pointer-events-none p-4 md:p-8 flex flex-col justify-between pt-20 md:pt-20 pb-20 md:pb-8 overflow-y-auto">
+    <div className="absolute inset-0 z-10 pointer-events-none p-4 md:p-8 flex flex-col justify-between pt-20 md:pt-20 pb-20 md:pb-8 overflow-hidden">
       {/* Top Left Floating Wallet Panel */}
-      <div className="pointer-events-auto max-w-md mt-1 animate-in fade-in slide-in-from-left-6 duration-500">
+      <div className={`pointer-events-auto max-w-md mt-1 transition-opacity duration-300 ${
+        isInspecting ? 'opacity-40 hover:opacity-100' : 'opacity-100'
+      }`}>
         <WalletCard />
       </div>
 
+      {/* Middle Hint: Interactive Room Prompt when not inspecting */}
+      {!isInspecting && (
+        <div className="pointer-events-none self-center flex items-center gap-2 px-4 py-1.5 rounded-full glass-panel border border-slate-200/80 text-slate-500 font-mono text-[11px] shadow-sm animate-pulse">
+          <MousePointerClick className="w-3.5 h-3.5 text-indigo-600" />
+          <span>Drag to orbit room • Click 3D MacBook, Smartwatch, or Headphones to inspect</span>
+        </div>
+      )}
+
       {/* Bottom Floating Hub: Aspirational Radar & Quick Portals */}
-      <div className="pointer-events-auto flex flex-col lg:flex-row items-stretch lg:items-end justify-between gap-4 mt-6">
+      <div className={`pointer-events-auto flex flex-col lg:flex-row items-stretch lg:items-end justify-between gap-4 mt-6 transition-all duration-300 ${
+        isInspecting ? 'opacity-30 pointer-events-none' : 'opacity-100'
+      }`}>
         {/* World Quick Portals */}
         <div className="glass-panel p-2.5 rounded-2xl border border-white/90 shadow-glass flex items-center gap-2 overflow-x-auto">
           <button
             onClick={() => setScreen('shop')}
-            className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-50 hover:bg-emerald-50 text-slate-700 hover:text-emerald-700 border border-slate-200/80 hover:border-emerald-300 text-xs font-mono font-bold transition-all whitespace-nowrap active:scale-95 shadow-sm"
+            className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-50 hover:bg-emerald-50 text-slate-700 hover:text-emerald-700 border border-slate-200/80 hover:border-emerald-300 text-xs font-mono font-bold transition-all whitespace-nowrap active:scale-95 shadow-sm cursor-pointer"
           >
             <ShoppingBag className="w-4 h-4 text-emerald-600" />
             <span>3D Showroom</span>
@@ -43,7 +59,7 @@ export const Dashboard: React.FC = () => {
 
           <button
             onClick={() => setScreen('garage')}
-            className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-50 hover:bg-cyan-50 text-slate-700 hover:text-cyan-700 border border-slate-200/80 hover:border-cyan-300 text-xs font-mono font-bold transition-all whitespace-nowrap active:scale-95 shadow-sm"
+            className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-50 hover:bg-cyan-50 text-slate-700 hover:text-cyan-700 border border-slate-200/80 hover:border-cyan-300 text-xs font-mono font-bold transition-all whitespace-nowrap active:scale-95 shadow-sm cursor-pointer"
           >
             <Car className="w-4 h-4 text-cyan-600" />
             <span>Vehicle Bay</span>
@@ -52,7 +68,7 @@ export const Dashboard: React.FC = () => {
 
           <button
             onClick={() => setScreen('home')}
-            className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-50 hover:bg-amber-50 text-slate-700 hover:text-amber-700 border border-slate-200/80 hover:border-amber-300 text-xs font-mono font-bold transition-all whitespace-nowrap active:scale-95 shadow-sm"
+            className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-50 hover:bg-amber-50 text-slate-700 hover:text-amber-700 border border-slate-200/80 hover:border-amber-300 text-xs font-mono font-bold transition-all whitespace-nowrap active:scale-95 shadow-sm cursor-pointer"
           >
             <Building2 className="w-4 h-4 text-amber-600" />
             <span>Sky Architecture</span>

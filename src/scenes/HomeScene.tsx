@@ -1,18 +1,46 @@
 import React, { useRef, useMemo, useEffect, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { MeshReflectorMaterial } from '@react-three/drei';
+import { MeshReflectorMaterial, Html } from '@react-three/drei';
 import * as THREE from 'three';
 import { CharacterAvatar } from '../models/CharacterAvatar';
 import { useWalletStore } from '../store/walletStore';
+import { useWorldStore } from '../store/worldStore';
+import { calculateAffordability } from '../utils/affordabilityService';
 
 export const HomeScene: React.FC = () => {
-  const avatarGear = useWalletStore(s => s.avatarGear);
+  const avatarGear = useWalletStore((s) => s.avatarGear);
+  const selectedProductId = useWalletStore((s) => s.selectedProductId);
+  const selectProduct = useWalletStore((s) => s.selectProduct);
+  const freeMoney = useWalletStore((s) => s.wallet.free);
+  const products = useWalletStore((s) => s.products);
+
+  const unlockedRoomItems = useWorldStore((s) => s.unlockedRoomItems);
+  const isCelebratingUnlock = useWorldStore((s) => s.isCelebratingUnlock);
+
   const cityGroup = useRef<THREE.Group>(null);
   const trafficGroup = useRef<THREE.Group>(null);
-  const sunBeamsRef = useRef<THREE.Group>(null);
+  const laptopGroup = useRef<THREE.Group>(null);
+  const watchGroup = useRef<THREE.Group>(null);
+  const headphonesGroup = useRef<THREE.Group>(null);
+  const celebrationParticlesRef = useRef<THREE.Group>(null);
+
+  const [hoveredItem, setHoveredItem] = useState<string | null>(null);
 
   // Dynamic light & colourful financial UI texture for the curved monitor
   const [monitorTexture, setMonitorTexture] = useState<THREE.CanvasTexture | null>(null);
+
+  // Products
+  const macbook = products.find((p) => p.id === 'prod-macbookpro');
+  const smartwatch = products.find((p) => p.id === 'prod-smartwatch');
+  const headphones = products.find((p) => p.id === 'prod-sony-wh1000xm6');
+
+  const macbookCalc = calculateAffordability(macbook?.price || 189900, freeMoney);
+  const smartwatchCalc = calculateAffordability(smartwatch?.price || 12990, freeMoney);
+  const headphonesCalc = calculateAffordability(headphones?.price || 29990, freeMoney);
+
+  const isSmartwatchOwned = unlockedRoomItems.includes('prod-smartwatch');
+  const isHeadphonesOwned = unlockedRoomItems.includes('prod-sony-wh1000xm6');
+  const isMacbookOwned = unlockedRoomItems.includes('prod-macbookpro');
 
   useEffect(() => {
     const canvas = document.createElement('canvas');
@@ -47,7 +75,7 @@ export const HomeScene: React.FC = () => {
 
       ctx.fillStyle = '#0F172A';
       ctx.font = 'bold 38px Inter, sans-serif';
-      ctx.fillText('₹38,420.00', 30, 95);
+      ctx.fillText(`₹${(38420).toLocaleString('en-IN')}.00`, 30, 95);
 
       ctx.fillStyle = '#10B981';
       ctx.font = '600 16px Inter, sans-serif';
@@ -127,12 +155,12 @@ export const HomeScene: React.FC = () => {
     const list = [];
     const count = 52;
     const towerColors = [
-      '#FFFFFF', // Modern white architecture
-      '#E0F2FE', // Ice blue glass
-      '#EDE9FE', // Lavender high-rise
-      '#FEF3C7', // Warm sandstone
-      '#FFE4E6', // Coral quartz
-      '#DCFCE7', // Eco mint tower
+      '#FFFFFF',
+      '#E0F2FE',
+      '#EDE9FE',
+      '#FEF3C7',
+      '#FFE4E6',
+      '#DCFCE7',
     ];
     const trimColors = ['#0EA5E9', '#10B981', '#F59E0B', '#EC4899', '#6366F1'];
 
@@ -154,14 +182,14 @@ export const HomeScene: React.FC = () => {
   const trafficCars = useMemo(() => {
     return Array.from({ length: 16 }, (_, i) => ({
       y: 2.0 + (i % 5) * 1.5,
-      z: -12 - (i * 1.8),
+      z: -12 - i * 1.8,
       speed: 1.8 + Math.random() * 2.5,
       color: i % 2 === 0 ? '#0EA5E9' : '#F43F5E',
       offset: Math.random() * 50 - 25,
     }));
   }, []);
 
-  useFrame(({ clock }) => {
+  useFrame(({ clock }, delta) => {
     const t = clock.getElapsedTime();
 
     // Traffic motion
@@ -174,15 +202,32 @@ export const HomeScene: React.FC = () => {
       });
     }
 
-    if (sunBeamsRef.current) {
-      sunBeamsRef.current.rotation.y = Math.sin(t * 0.1) * 0.03;
+    // Gentle slow rotation when an item is inspected
+    if (selectedProductId === 'prod-smartwatch' && watchGroup.current) {
+      watchGroup.current.rotation.y += delta * 0.8;
+    }
+    if (selectedProductId === 'prod-macbookpro' && laptopGroup.current) {
+      laptopGroup.current.rotation.y = 0.35 + Math.sin(t * 1.2) * 0.08;
+    }
+    if (selectedProductId === 'prod-sony-wh1000xm6' && headphonesGroup.current) {
+      headphonesGroup.current.rotation.y += delta * 0.7;
+    }
+
+    // Celebration particles ascend
+    if (celebrationParticlesRef.current && isCelebratingUnlock) {
+      celebrationParticlesRef.current.children.forEach((p, idx) => {
+        p.position.y += delta * 0.6;
+        if (p.position.y > 2.5) {
+          p.position.y = 1.1;
+        }
+        p.rotation.y += delta * (idx % 2 === 0 ? 1 : -1);
+      });
     }
   });
 
   return (
     <group position={[0, 0, 0]}>
       {/* ===================== BRIGHT SKY BACKDROP ===================== */}
-      {/* Sunlit Sky Dome Plane */}
       <mesh position={[0, 10, -32]}>
         <planeGeometry args={[80, 50]} />
         <meshBasicMaterial color="#E0F2FE" />
@@ -208,7 +253,6 @@ export const HomeScene: React.FC = () => {
       ))}
 
       {/* ===================== LUXURY SUNLIT PENTHOUSE ARCHITECTURE ===================== */}
-
       {/* Polished White Marble / Terrazzo Reflective Floor */}
       <mesh position={[0, 0, 0]} rotation={[-Math.PI / 2, 0, 0]}>
         <planeGeometry args={[16, 14]} />
@@ -299,13 +343,10 @@ export const HomeScene: React.FC = () => {
       <group ref={cityGroup}>
         {buildings.map((b, i) => (
           <group key={i} position={[b.x, b.height / 2 - 4.5, b.z]}>
-            {/* Tower Body */}
             <mesh>
               <boxGeometry args={[b.width, b.height, b.depth]} />
               <meshStandardMaterial color={b.bodyColor} roughness={0.3} metalness={0.1} />
             </mesh>
-
-            {/* Colourful Sunlit Window Bands */}
             <mesh position={[0, 0, b.depth / 2 + 0.02]}>
               <planeGeometry args={[b.width * 0.9, b.height * 0.85]} />
               <meshStandardMaterial
@@ -315,14 +356,10 @@ export const HomeScene: React.FC = () => {
                 wireframe
               />
             </mesh>
-
-            {/* Rooftop Garden / Solar Accent Plate */}
             <mesh position={[0, b.height / 2 + 0.05, 0]}>
               <boxGeometry args={[b.width * 0.9, 0.1, b.depth * 0.9]} />
               <meshStandardMaterial color={b.trimColor} roughness={0.4} />
             </mesh>
-
-            {/* Rooftop Antenna Spire */}
             {b.hasAntenna && (
               <mesh position={[0, b.height / 2 + 0.8, 0]}>
                 <cylinderGeometry args={[0.02, 0.04, 1.6, 8]} />
@@ -343,27 +380,25 @@ export const HomeScene: React.FC = () => {
         ))}
       </group>
 
-      {/* ===================== MODERN LIGHT FURNITURE & TECH ===================== */}
-
-      {/* Minimalist Bleached Birch & White Executive Desk */}
+      {/* ===================== EXECUTIVE DESK & WORKSTATION ===================== */}
       <group position={[-2.6, 0, -2.5]}>
         {/* Clean White Top */}
         <mesh position={[0, 1.05, 0]}>
-          <boxGeometry args={[2.5, 0.06, 1.15]} />
+          <boxGeometry args={[2.7, 0.06, 1.25]} />
           <meshStandardMaterial color="#FFFFFF" roughness={0.2} metalness={0.1} />
         </mesh>
         {/* Birch Wood Sled Legs */}
-        <mesh position={[-1.15, 0.52, 0]}>
-          <boxGeometry args={[0.06, 1.0, 1.05]} />
+        <mesh position={[-1.25, 0.52, 0]}>
+          <boxGeometry args={[0.06, 1.0, 1.15]} />
           <meshStandardMaterial color="#D7C4B7" roughness={0.5} />
         </mesh>
-        <mesh position={[1.15, 0.52, 0]}>
-          <boxGeometry args={[0.06, 1.0, 1.05]} />
+        <mesh position={[1.25, 0.52, 0]}>
+          <boxGeometry args={[0.06, 1.0, 1.15]} />
           <meshStandardMaterial color="#D7C4B7" roughness={0.5} />
         </mesh>
 
         {/* Ultra-Wide Curved Silver Studio Display */}
-        <group position={[0, 1.48, -0.22]}>
+        <group position={[0, 1.48, -0.25]}>
           {/* Silver Aluminium Stand */}
           <mesh position={[0, -0.25, 0]}>
             <cylinderGeometry args={[0.035, 0.035, 0.4, 16]} />
@@ -389,37 +424,259 @@ export const HomeScene: React.FC = () => {
           </mesh>
         </group>
 
-        {/* Silver MacBook on Desk */}
-        <group position={[-0.8, 1.08, 0.18]} rotation={[0, 0.35, 0]}>
+        {/* ================= INTERACTIVE ITEM 1: MACBOOK PRO 16" M4 MAX ================= */}
+        <group
+          ref={laptopGroup}
+          position={[-0.75, 1.08, 0.15]}
+          rotation={[0, 0.35, 0]}
+          onClick={(e) => {
+            e.stopPropagation();
+            selectProduct('prod-macbookpro');
+          }}
+          onPointerOver={(e) => {
+            e.stopPropagation();
+            setHoveredItem('laptop');
+            document.body.style.cursor = 'pointer';
+          }}
+          onPointerOut={() => {
+            setHoveredItem(null);
+            document.body.style.cursor = 'auto';
+          }}
+        >
+          {/* Base Chassis */}
           <mesh position={[0, 0.01, 0]}>
-            <boxGeometry args={[0.42, 0.015, 0.3]} />
-            <meshStandardMaterial color="#E2E8F0" metalness={0.9} roughness={0.15} />
+            <boxGeometry args={[0.44, 0.016, 0.32]} />
+            <meshStandardMaterial
+              color={selectedProductId === 'prod-macbookpro' ? '#FFFFFF' : '#E2E8F0'}
+              metalness={0.9}
+              roughness={0.15}
+            />
           </mesh>
-          <group position={[0, 0.02, -0.15]} rotation={[-0.45, 0, 0]}>
-            <mesh position={[0, 0.13, 0]}>
-              <boxGeometry args={[0.42, 0.27, 0.012]} />
+
+          {/* Screen Display open at 115 degrees */}
+          <group position={[0, 0.02, -0.16]} rotation={[-0.45, 0, 0]}>
+            <mesh position={[0, 0.14, 0]}>
+              <boxGeometry args={[0.44, 0.28, 0.012]} />
               <meshStandardMaterial color="#F8FAFC" metalness={0.9} />
             </mesh>
-            <mesh position={[0, 0.13, 0.007]}>
-              <planeGeometry args={[0.4, 0.25]} />
-              <meshStandardMaterial color="#6366F1" emissive="#818CF8" emissiveIntensity={0.6} />
+            {/* Luminous Retina Screen */}
+            <mesh position={[0, 0.14, 0.007]}>
+              <planeGeometry args={[0.42, 0.26]} />
+              <meshStandardMaterial
+                color="#6366F1"
+                emissive="#818CF8"
+                emissiveIntensity={selectedProductId === 'prod-macbookpro' ? 1.2 : 0.6}
+              />
             </mesh>
           </group>
+
+          {/* Hover / Selection Ring */}
+          {(hoveredItem === 'laptop' || selectedProductId === 'prod-macbookpro') && (
+            <mesh position={[0, 0.005, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+              <ringGeometry args={[0.26, 0.3, 32]} />
+              <meshBasicMaterial
+                color={isMacbookOwned ? '#10B981' : '#F43F5E'}
+                transparent
+                opacity={0.85}
+              />
+            </mesh>
+          )}
+
+          {/* Floating Contextual Pill Tag */}
+          <Html position={[0, 0.38, 0]} center distanceFactor={7}>
+            <div
+              onClick={() => selectProduct('prod-macbookpro')}
+              className={`px-3 py-1 rounded-full text-[10px] font-mono font-bold shadow-lg border flex items-center gap-1.5 transition-transform duration-200 cursor-pointer pointer-events-auto whitespace-nowrap select-none ${
+                selectedProductId === 'prod-macbookpro'
+                  ? 'scale-110 bg-slate-900 text-white border-indigo-400 ring-2 ring-indigo-400/50'
+                  : hoveredItem === 'laptop'
+                  ? 'scale-105 bg-white text-slate-900 border-indigo-300 shadow-xl'
+                  : 'bg-white/90 text-slate-700 border-slate-200 hover:scale-105'
+              }`}
+            >
+              <span>💻</span>
+              <span>MacBook Pro 16"</span>
+              <span className={`px-1.5 py-0.2 rounded-md ${
+                isMacbookOwned
+                  ? 'bg-emerald-100 text-emerald-800'
+                  : 'bg-rose-100 text-rose-800'
+              }`}>
+                {isMacbookOwned ? 'OWNED' : `${Math.round(macbookCalc.progress * 100)}%`}
+              </span>
+            </div>
+          </Html>
+        </group>
+
+        {/* ================= INTERACTIVE ITEM 2: APEX CYBER HORIZON SMARTWATCH ================= */}
+        <group
+          ref={watchGroup}
+          position={[0.85, 1.08, 0.15]}
+          onClick={(e) => {
+            e.stopPropagation();
+            selectProduct('prod-smartwatch');
+          }}
+          onPointerOver={(e) => {
+            e.stopPropagation();
+            setHoveredItem('watch');
+            document.body.style.cursor = 'pointer';
+          }}
+          onPointerOut={() => {
+            setHoveredItem(null);
+            document.body.style.cursor = 'auto';
+          }}
+        >
+          {/* Modern Magnetic Angled Charging Stand */}
+          <mesh position={[0, 0.04, 0]}>
+            <cylinderGeometry args={[0.08, 0.09, 0.08, 24]} />
+            <meshStandardMaterial color="#E2E8F0" roughness={0.3} metalness={0.8} />
+          </mesh>
+          <mesh position={[0, 0.09, 0]} rotation={[0.4, 0, 0]}>
+            <cylinderGeometry args={[0.06, 0.06, 0.04, 24]} />
+            <meshStandardMaterial color="#FFFFFF" roughness={0.2} metalness={0.5} />
+          </mesh>
+
+          {/* Smartwatch Case (Titanium with Emerald Screen) */}
+          <group position={[0, 0.12, 0.02]} rotation={[0.4, 0, 0]}>
+            {/* Outer Bezel */}
+            <mesh>
+              <cylinderGeometry args={[0.065, 0.065, 0.02, 32]} />
+              <meshStandardMaterial
+                color={selectedProductId === 'prod-smartwatch' ? '#FFFFFF' : '#0F172A'}
+                metalness={0.9}
+                roughness={0.15}
+              />
+            </mesh>
+            {/* Emerald Holographic Always-On Dial */}
+            <mesh position={[0, 0.011, 0]}>
+              <circleGeometry args={[0.054, 32]} />
+              <meshStandardMaterial
+                color="#10B981"
+                emissive="#34D399"
+                emissiveIntensity={isSmartwatchOwned ? 2.2 : 1.5}
+              />
+            </mesh>
+            {/* Silicone Strap Ends */}
+            <mesh position={[0, 0, 0.07]}>
+              <boxGeometry args={[0.045, 0.015, 0.05]} />
+              <meshStandardMaterial color="#1E293B" roughness={0.8} />
+            </mesh>
+            <mesh position={[0, 0, -0.07]}>
+              <boxGeometry args={[0.045, 0.015, 0.05]} />
+              <meshStandardMaterial color="#1E293B" roughness={0.8} />
+            </mesh>
+          </group>
+
+          {/* Pulsing Mint Beacon Ring for Affordable Item */}
+          <mesh position={[0, 0.01, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+            <ringGeometry args={[0.13, 0.16, 32]} />
+            <meshStandardMaterial
+              color="#10B981"
+              emissive="#34D399"
+              emissiveIntensity={1.8}
+            />
+          </mesh>
+
+          {/* Floating Contextual Pill Tag */}
+          <Html position={[0, 0.32, 0]} center distanceFactor={7}>
+            <div
+              onClick={() => selectProduct('prod-smartwatch')}
+              className={`px-3 py-1 rounded-full text-[10px] font-mono font-bold shadow-lg border flex items-center gap-1.5 transition-transform duration-200 cursor-pointer pointer-events-auto whitespace-nowrap select-none ${
+                selectedProductId === 'prod-smartwatch'
+                  ? 'scale-110 bg-emerald-600 text-white border-emerald-300 ring-2 ring-emerald-400/50'
+                  : hoveredItem === 'watch'
+                  ? 'scale-105 bg-emerald-50 text-emerald-900 border-emerald-400 shadow-xl'
+                  : 'bg-white/95 text-emerald-800 border-emerald-300 hover:scale-105'
+              }`}
+            >
+              <span>⚡</span>
+              <span>Cyber Horizon</span>
+              <span className="px-1.5 py-0.2 rounded-md bg-emerald-100 text-emerald-800 font-extrabold">
+                {isSmartwatchOwned ? 'OWNED' : smartwatchCalc.canAffordNow ? 'AVAILABLE • ₹12,990' : `${Math.round(smartwatchCalc.progress * 100)}%`}
+              </span>
+            </div>
+          </Html>
+        </group>
+
+        {/* ================= INTERACTIVE ITEM 3: SONY WH-1000XM6 HEADPHONES ================= */}
+        <group
+          ref={headphonesGroup}
+          position={[-1.15, 1.08, -0.05]}
+          onClick={(e) => {
+            e.stopPropagation();
+            selectProduct('prod-sony-wh1000xm6');
+          }}
+          onPointerOver={(e) => {
+            e.stopPropagation();
+            setHoveredItem('headphones');
+            document.body.style.cursor = 'pointer';
+          }}
+          onPointerOut={() => {
+            setHoveredItem(null);
+            document.body.style.cursor = 'auto';
+          }}
+        >
+          {/* Curved Scandinavian Wooden Headphone Stand */}
+          <mesh position={[0, 0.14, 0]}>
+            <cylinderGeometry args={[0.04, 0.05, 0.28, 16]} />
+            <meshStandardMaterial color="#D7C4B7" roughness={0.6} />
+          </mesh>
+          <mesh position={[0, 0.28, 0]}>
+            <sphereGeometry args={[0.06, 16, 16]} />
+            <meshStandardMaterial color="#D7C4B7" roughness={0.6} />
+          </mesh>
+
+          {/* Headphones Resting on Stand */}
+          <group position={[0, 0.24, 0]}>
+            {/* Headband */}
+            <mesh position={[0, 0.04, 0]}>
+              <torusGeometry args={[0.1, 0.012, 16, 24, Math.PI]} />
+              <meshStandardMaterial color="#1E293B" roughness={0.4} metalness={0.6} />
+            </mesh>
+            {/* Ear Cups */}
+            <mesh position={[-0.1, -0.02, 0]} rotation={[0, 0, Math.PI / 2]}>
+              <cylinderGeometry args={[0.04, 0.04, 0.03, 16]} />
+              <meshStandardMaterial color="#0F172A" metalness={0.8} />
+            </mesh>
+            <mesh position={[0.1, -0.02, 0]} rotation={[0, 0, Math.PI / 2]}>
+              <cylinderGeometry args={[0.04, 0.04, 0.03, 16]} />
+              <meshStandardMaterial color="#0F172A" metalness={0.8} />
+            </mesh>
+          </group>
+
+          {/* Floating Contextual Pill Tag */}
+          <Html position={[0, 0.38, 0]} center distanceFactor={7}>
+            <div
+              onClick={() => selectProduct('prod-sony-wh1000xm6')}
+              className={`px-2.5 py-1 rounded-full text-[10px] font-mono font-bold shadow-lg border flex items-center gap-1.5 transition-transform duration-200 cursor-pointer pointer-events-auto whitespace-nowrap select-none ${
+                selectedProductId === 'prod-sony-wh1000xm6'
+                  ? 'scale-110 bg-indigo-600 text-white border-indigo-300 ring-2 ring-indigo-400/50'
+                  : hoveredItem === 'headphones'
+                  ? 'scale-105 bg-white text-indigo-900 border-indigo-300 shadow-xl'
+                  : 'bg-white/90 text-slate-700 border-slate-200 hover:scale-105'
+              }`}
+            >
+              <span>🎧</span>
+              <span>Sony XM6</span>
+              <span className="px-1.5 py-0.2 rounded-md bg-amber-100 text-amber-800">
+                {isHeadphonesOwned ? 'OWNED' : `${Math.round(headphonesCalc.progress * 100)}%`}
+              </span>
+            </div>
+          </Html>
         </group>
 
         {/* White Mechanical Keyboard & Magic Mouse */}
-        <mesh position={[0.1, 1.082, 0.15]}>
+        <mesh position={[0.05, 1.082, 0.22]}>
           <boxGeometry args={[0.55, 0.012, 0.18]} />
           <meshStandardMaterial color="#F1F5F9" roughness={0.4} />
         </mesh>
-        <mesh position={[0.48, 1.082, 0.15]}>
+        <mesh position={[0.42, 1.082, 0.22]}>
           <boxGeometry args={[0.07, 0.015, 0.11]} />
           <meshStandardMaterial color="#FFFFFF" roughness={0.2} />
         </mesh>
       </group>
 
       {/* Light Grey Minimalist Designer Office Chair */}
-      <group position={[-2.6, 0, -1.4]} rotation={[0, 0.25, 0]}>
+      <group position={[-2.6, 0, -1.35]} rotation={[0, 0.25, 0]}>
         <mesh position={[0, 0.1, 0]}>
           <cylinderGeometry args={[0.35, 0.35, 0.04, 16]} />
           <meshStandardMaterial color="#E2E8F0" metalness={0.9} />
@@ -440,25 +697,21 @@ export const HomeScene: React.FC = () => {
 
       {/* Modern Low Platform Bed with Pure Linen Duvet & Pastel Coral Pillows */}
       <group position={[3.2, 0, -2.4]}>
-        {/* Blonde Wood Bed Base */}
         <mesh position={[0, 0.25, 0]}>
           <boxGeometry args={[2.8, 0.5, 3.4]} />
           <meshStandardMaterial color="#E7DFD5" roughness={0.6} />
         </mesh>
-
         {/* Sunrise Warm Underglow */}
         <mesh position={[0, 0.03, 0]}>
           <boxGeometry args={[2.9, 0.02, 3.5]} />
           <meshStandardMaterial color="#F59E0B" emissive="#FBBF24" emissiveIntensity={1.8} />
         </mesh>
-
         {/* Crisp White Linen Mattress & Duvet */}
         <mesh position={[0, 0.58, 0.1]}>
           <boxGeometry args={[2.6, 0.22, 3.1]} />
           <meshStandardMaterial color="#FFFFFF" roughness={0.9} />
         </mesh>
-
-        {/* Pastel Coral & Mint Luxury Pillows */}
+        {/* Pastel Pillows */}
         <mesh position={[-0.65, 0.74, -1.1]}>
           <boxGeometry args={[0.9, 0.12, 0.6]} />
           <meshStandardMaterial color="#FDA4AF" roughness={0.9} />
@@ -467,20 +720,17 @@ export const HomeScene: React.FC = () => {
           <boxGeometry args={[0.9, 0.12, 0.6]} />
           <meshStandardMaterial color="#A7F3D0" roughness={0.9} />
         </mesh>
-
         {/* Blonde Wood Headboard */}
         <mesh position={[0, 0.95, -1.6]}>
           <boxGeometry args={[3.0, 1.3, 0.18]} />
           <meshStandardMaterial color="#E7DFD5" roughness={0.6} />
         </mesh>
-
         {/* Bedside Floating Table */}
         <group position={[1.8, 0.45, -1.2]}>
           <mesh>
             <boxGeometry args={[0.6, 0.4, 0.55]} />
             <meshStandardMaterial color="#FFFFFF" roughness={0.3} />
           </mesh>
-          {/* Ceramic Plant Pot with Lush Green Plant */}
           <group position={[0, 0.25, 0]}>
             <mesh>
               <cylinderGeometry args={[0.1, 0.08, 0.16, 16]} />
@@ -494,16 +744,71 @@ export const HomeScene: React.FC = () => {
         </group>
       </group>
 
-      {/* Stylish Character Avatar in Clean White & Mint Streetwear */}
-      <group position={[-0.4, 0, -2.8]} rotation={[0, -0.35, 0]}>
+      {/* ===================== STYLIZED HUMAN AVATAR ===================== */}
+      <group position={[-0.4, 0, -2.8]} rotation={[0, -0.3, 0]}>
         <CharacterAvatar gear={avatarGear} isStanding={true} interactive={true} scale={1.05} />
       </group>
 
+      {/* ===================== CELEBRATION PARTICLES ===================== */}
+      {isCelebratingUnlock && (
+        <group ref={celebrationParticlesRef} position={[-1.75, 1.2, -2.15]}>
+          {Array.from({ length: 16 }).map((_, idx) => (
+            <mesh
+              key={idx}
+              position={[
+                (Math.random() - 0.5) * 0.6,
+                Math.random() * 0.8,
+                (Math.random() - 0.5) * 0.6,
+              ]}
+            >
+              <sphereGeometry args={[0.025, 8, 8]} />
+              <meshBasicMaterial
+                color={idx % 2 === 0 ? '#10B981' : '#F59E0B'}
+              />
+            </mesh>
+          ))}
+        </group>
+      )}
+
+      {/* ===================== FOCUSED PRODUCT SPOTLIGHTS ===================== */}
+      {selectedProductId === 'prod-smartwatch' && (
+        <spotLight
+          position={[-1.75, 2.5, -2.15]}
+          target-position={[-1.75, 1.15, -2.15]}
+          intensity={3.5}
+          color="#34D399"
+          distance={4}
+          angle={0.6}
+          penumbra={0.5}
+        />
+      )}
+      {selectedProductId === 'prod-macbookpro' && (
+        <spotLight
+          position={[-3.35, 2.6, -2.35]}
+          target-position={[-3.35, 1.1, -2.35]}
+          intensity={3.5}
+          color="#818CF8"
+          distance={4}
+          angle={0.6}
+          penumbra={0.5}
+        />
+      )}
+      {selectedProductId === 'prod-sony-wh1000xm6' && (
+        <spotLight
+          position={[-3.75, 2.5, -2.55]}
+          target-position={[-3.75, 1.2, -2.55]}
+          intensity={3.5}
+          color="#F59E0B"
+          distance={4}
+          angle={0.6}
+          penumbra={0.5}
+        />
+      )}
+
       {/* ===================== BRIGHT CHEERFUL CINEMATIC LIGHTING ===================== */}
-      {/* Soft Sky Ambient Light */}
       <ambientLight intensity={0.75} color="#F1F5F9" />
 
-      {/* Bright Golden Sunlight Streaming through Window */}
+      {/* Golden Sunlight Streaming through Window */}
       <directionalLight
         position={[8, 14, -10]}
         intensity={2.2}
@@ -511,17 +816,13 @@ export const HomeScene: React.FC = () => {
         castShadow
       />
 
-      {/* Window Sky Blue Fill Light */}
-      <directionalLight
-        position={[-6, 10, -8]}
-        intensity={1.0}
-        color="#BAE6FD"
-      />
+      {/* Sky Blue Fill */}
+      <directionalLight position={[-6, 10, -8]} intensity={1.0} color="#BAE6FD" />
 
       {/* Warm Interior Sun Fill */}
       <pointLight position={[-1, 3.2, 0]} intensity={1.2} color="#FFF7ED" distance={10} />
 
-      {/* Subtle Mint Glow from Window Sill */}
+      {/* Subtle Mint Window Sill Glow */}
       <pointLight position={[0, 1.2, -4.8]} intensity={1.4} color="#34D399" distance={4} />
 
       {/* Bed Sunrise Warm Glow */}

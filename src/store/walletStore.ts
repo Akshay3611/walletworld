@@ -95,7 +95,7 @@ export const useWalletStore = create<WalletState>((set, get) => ({
   },
 
   buyProduct: (productId: string): boolean => {
-    const { products, wallet, inventory } = get();
+    const { products, wallet, inventory, avatarGear } = get();
     const product = products.find(p => p.id === productId);
     if (!product) return false;
 
@@ -111,15 +111,23 @@ export const useWalletStore = create<WalletState>((set, get) => ({
 
     sound.playUnlock();
 
+    // Auto-equip watch if buying smartwatch
+    let updatedGear = { ...avatarGear };
+    if (product.category === 'watches') {
+      updatedGear.watch = 'digital_cyber';
+    }
+
     set({
       wallet: {
         ...wallet,
         free: newFree,
         total: newTotal,
       },
+      avatarGear: updatedGear,
       inventory: [...inventory, product],
       purchaseCelebrationItem: product,
-      isInspecting: false,
+      isInspecting: true, // Keep inspection active to admire the unlocked item
+      selectedProductId: productId,
     });
 
     return true;
